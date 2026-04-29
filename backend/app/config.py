@@ -1,4 +1,5 @@
 """Configuration de l'application FastAPI AgriData."""
+import os
 from typing import Optional
 
 from pydantic import Field, field_validator
@@ -9,10 +10,8 @@ def _parse_bool(value, default: bool = False) -> bool:
     """Accept common deployment values like 'release' without crashing."""
     if isinstance(value, bool):
         return value
-
     if value is None:
         return default
-
     normalized = str(value).strip().lower()
     if normalized in {"1", "true", "yes", "on", "debug", "development", "dev"}:
         return True
@@ -38,13 +37,19 @@ class Settings(BaseSettings):
     DOCS_URL: str = "/docs"
     REDOC_URL: str = "/redoc"
 
-    DATA_DIR: str = "data"
+    # Sur Vercel, DATA_DIR pointe vers /tmp (inscriptible).
+    # La variable VERCEL est injectée automatiquement par la plateforme.
+    DATA_DIR: str = Field(
+        default_factory=lambda: "/tmp/agridata-data" if os.getenv("VERCEL") else "data"
+    )
 
     SECRET_KEY: str = "dev-secret-key-change-in-production"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
+    # CORS : mettez votre domaine Vercel dans la variable d'env CORS_ORIGINS
+    # Exemple : CORS_ORIGINS=https://mon-projet.vercel.app
     CORS_ORIGINS: list[str] = Field(
         default_factory=lambda: [
             "http://localhost:3000",
