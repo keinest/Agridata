@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang='fr'>
+<head>
+    <meta charset='UTF-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0, viewport-fit=cover'>
+    <title>AgriData | Solutions Agricoles Intelligentes</title>
+    <meta name="description" content="Plateforme de gestion agricole connectée : suivi des cultures, prévisions de rendement, analyses en temps réel.">
+    <!-- Google Fonts + Font Awesome pour une meilleure apparence -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="/assets/css/styles.css">
+</head>
+<body>
+
+<nav class='navbar'>
+    <div class='brand'>
+        <i class="fas fa-seedling"></i> AgriData
+    </div>
+    <div class='nav-links'>
+        <a href='#' onclick="showPage('landingPage'); return false;"><i class="fas fa-home"></i> Accueil</a>
+        <a href='#' onclick="showPage('loginPage'); return false;"><i class="fas fa-sign-in-alt"></i> Connexion</a>
+        <a href='#' onclick="showPage('registerPage'); return false;"><i class="fas fa-user-plus"></i> Inscription</a>
+    </div>
+</nav>
+
+<!-- ==================== LANDING PAGE RICHE ==================== -->
+<section id='landingPage' class='page'>
+    <div class='hero'>
+        <h1>Pilotez l'avenir de votre exploitation agricole</h1>
+        <p>Données en temps réel, prévisions intelligentes, optimisation des rendements. Une plateforme tout-en-un pour les agriculteurs modernes.</p>
+        <button class='btn-primary' onclick="showPage('registerPage')"><i class="fas fa-rocket"></i> Commencer maintenant</button>
+        <button class='btn-outline' style="margin-left: 1rem;" onclick="document.getElementById('features-section').scrollIntoView({behavior:'smooth'});"><i class="fas fa-info-circle"></i> Découvrir</button>
+    </div>
+
+    <div class="container">
+        <!-- Grille fonctionnalités -->
+        <div id="features-section">
+            <h2 class="section-title"><i class="fas fa-chart-line"></i> Fonctionnalités clés</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fas fa-tachometer-alt"></i></div>
+                    <h3>Tableau de bord temps réel</h3>
+                    <p>Suivez l'humidité du sol, température, et état des cultures depuis une interface intuitive.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fas fa-chart-simple"></i></div>
+                    <h3>Prévisions de rendement</h3>
+                    <p>Algorithmes basés sur l'IA pour estimer vos récoltes et anticiper les marchés.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fas fa-cloud-sun-rain"></i></div>
+                    <h3>Météo agricole hyperlocale</h3>
+                    <p>Alertes gel, sécheresse, conseils d'irrigation adaptés à vos parcelles.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fas fa-file-alt"></i></div>
+                    <h3>Analyse parcellaire</h3>
+                    <p>Rapports détaillés et historique des cultures pour optimiser chaque saison.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bandeau statistiques -->
+        <div class="stats-banner">
+            <div class="stat-item"><h4>+12k</h4><p>Exploitations connectées</p></div>
+            <div class="stat-item"><h4>98%</h4><p>Précision météo</p></div>
+            <div class="stat-item"><h4>30%</h4><p>Augmentation moyenne rendement*</p></div>
+            <div class="stat-item"><h4>24/7</h4><p>Support technique</p></div>
+        </div>
+
+        <!-- Témoignage + CTA supplémentaire -->
+        <div class="testimonial">
+            <i class="fas fa-quote-left" style="color:#2e8b57; font-size: 1.6rem; opacity:0.6;"></i>
+            <p style="font-style: italic; margin: 0.6rem 0 0.8rem;">"Grâce à AgriData, j'ai réduit ma consommation d'eau de 22% tout en augmentant ma production de maïs. Les alertes sont d'une fiabilité incroyable."</p>
+            <div style="font-weight: 600;">— Sophie L., arboricultrice en Nouvelle-Aquitaine</div>
+        </div>
+        <div style="text-align: center; margin-top: 2rem;">
+            <button class="btn-primary" onclick="showPage('registerPage')"><i class="fas fa-user-check"></i> Créer mon espace gratuitement</button>
+        </div>
+    </div>
+</section>
+
+<!-- ==================== PAGE CONNEXION ==================== -->
+<section id='loginPage' class='page hidden'>
+    <div class='card'>
+        <h2><i class="fas fa-leaf"></i> Bon retour</h2>
+        <form id='loginForm' action="#">
+            <div class="input-group">
+                <label><i class="fas fa-envelope"></i> Adresse email</label>
+                <input type="email" id='email' placeholder="agriculteur@exemple.fr" required>
+            </div>
+            <div class="input-group">
+                <label><i class="fas fa-lock"></i> Mot de passe</label>
+                <input type="password" id='password' placeholder="••••••••" required>
+            </div>
+            <button type="submit"><i class="fas fa-arrow-right-to-bracket"></i> Se connecter</button>
+            <div class="form-footer">
+                <a href="#" onclick="showPage('registerPage'); return false;" style="color:#1f6f43; text-decoration: none;">Pas encore de compte ? Inscription gratuite</a>
+            </div>
+            <p id='loginMsg' class="msg"></p>
+        </form>
+    </div>
+</section>
+
+<!-- ==================== PAGE INSCRIPTION ==================== -->
+<section id='registerPage' class='page hidden'>
+    <div class='card'>
+        <h2><i class="fas fa-sprout"></i> Rejoindre AgriData</h2>
+        <form id='registerForm' action="#">
+            <div class="input-group">
+                <label><i class="fas fa-user"></i> Nom complet</label>
+                <input type="text" id='name' placeholder="Jean Dupont" required>
+            </div>
+            <div class="input-group">
+                <label><i class="fas fa-envelope"></i> Email professionnel</label>
+                <input type="email" id='regEmail' placeholder="contact@ferme.fr" required>
+            </div>
+            <div class="input-group">
+                <label><i class="fas fa-key"></i> Mot de passe</label>
+                <input type="password" id='regPassword' placeholder="au moins 6 caractères" required>
+            </div>
+            <button type="submit"><i class="fas fa-check-circle"></i> Créer mon compte</button>
+            <div class="form-footer">
+                <a href="#" onclick="showPage('loginPage'); return false;" style="color:#1f6f43; text-decoration: none;">Déjà membre ? Se connecter</a>
+            </div>
+            <p id='regMsg' class="msg"></p>
+        </form>
+    </div>
+</section>
+
+<footer>
+    <p><i class="fas fa-copyright"></i> 2026 AgriData - Solutions connectées pour une agriculture durable | <i class="fas fa-globe"></i> Données météo, IA & agronomie</p>
+</footer>
+
+<script src="/assets/js/app.js"></script>
+
+</body>
+</html>
