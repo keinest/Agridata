@@ -23,7 +23,7 @@ def print_menu() -> None:
     print("=" * 64)
     print("1. Lancer le backend FastAPI")
     print("2. Servir le frontend statique")
-    print("3. Initialiser la base MySQL")
+    print("3. Initialiser la base JSON")
     print("4. Valider le projet avant déploiement")
     print("5. Générer une SECRET_KEY")
     print("6. Déployer sur Vercel (CLI)")
@@ -41,10 +41,8 @@ def serve_frontend() -> None:
 
 
 def init_database() -> None:
-    mysql_user = input("Utilisateur MySQL [root]: ").strip() or "root"
-    mysql_host = input("Hôte MySQL [localhost]: ").strip() or "localhost"
-    command = f"mysql -u {mysql_user} -p -h {mysql_host} < {BACKEND_PATH / 'database_init.sql'}"
-    run_command(["bash", "-lc", command], cwd=PROJECT_ROOT)
+    print("JSON database initialization - no action needed")
+    print("Data files will be created automatically in the data/ directory")
 
 
 def validate_project() -> None:

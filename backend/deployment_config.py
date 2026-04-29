@@ -3,27 +3,21 @@ Configuration pour déploiement sur Render/Railway/PythonAnywhere
 """
 import os
 
-# Render/Railway detection
 if os.environ.get("RENDER") or os.environ.get("RAILWAY_ENVIRONMENT"):
     from app.config import Settings
     
     class ProductionSettings(Settings):
-        # Force HTTPS en production
         CORS_ORIGINS = [
             "https://agridata.onrender.com",
             "https://agridata-py.railway.app",
             "https://your-vercel-domain.vercel.app"
         ]
         
-        # Database (use from env variables)
-        # Render: DB_HOST will be injected from internal service
-        # Railway: DATABASE_URL format: mysql://user:pass@host/db
         
         DEBUG = False
         LOG_LEVEL = "INFO"
 
 
-# Render specific
 if os.environ.get("RENDER"):
     """
     Render.yml pour déploiement:
@@ -56,7 +50,6 @@ services:
     pass
 
 
-# Railway specific
 if os.environ.get("RAILWAY_ENVIRONMENT"):
     """
     railway.json pour déploiement:
@@ -82,7 +75,6 @@ Environment Variables sur Railway:
     pass
 
 
-# PythonAnywhere specific
 if False:  # Enable when deploying to PythonAnywhere
     """
     Configuration PythonAnywhere:

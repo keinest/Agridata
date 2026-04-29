@@ -141,6 +141,10 @@ logs/
 *.sqlite
 *.sqlite3
 
+# JSON Data Files (local development only)
+data/*.json
+!data/.gitkeep
+
 # Node.js (if any)
 node_modules/
 npm-debug.log*
@@ -150,3 +154,23 @@ yarn-error.log*
 # Temporary files
 *.tmp
 *.temp
+
+# Vercel deployment
+.vercel/
+
+# Environment variables
+.env
+.env.local
+.env.production
+.env.staging
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+Thumbs.db
+.DS_Store

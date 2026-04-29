@@ -1,18 +1,14 @@
-"""Analytics and reporting endpoints."""
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
-from sqlalchemy import func
 from typing import Optional
 from datetime import date
 from pydantic import BaseModel
 from app.api.dependencies import get_accessible_exploitation, get_current_user
-from app.database import get_db
+from app.database import db
 from app.infrastructure.models import (
     Rendement, MeteoData, Intrant, User, Exploitation
 )
 
 router = APIRouter()
-
 
 class StatsResponse(BaseModel):
     total_rendements: int
@@ -23,99 +19,89 @@ class StatsResponse(BaseModel):
     avg_humidity: Optional[float] = None
     avg_temperature: Optional[float] = None
 
-
 @router.get("/exploitations/stats", response_model=StatsResponse)
 async def get_exploitation_stats(
     exploitation_id: int,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
-    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get analytics for an exploitation"""
-    get_accessible_exploitation(db, current_user, exploitation_id)
-    
-    # Build queries with optional filters
-    rendement_query = db.query(Rendement).filter(
-        Rendement.exploitation_id == exploitation_id,
-        Rendement.tenant_id == current_user.tenant_id
-    )
-    
-    meteo_query = db.query(MeteoData).filter(
-        MeteoData.exploitation_id == exploitation_id,
-        MeteoData.tenant_id == current_user.tenant_id
-    )
-    
-    intrant_query = db.query(Intrant).filter(
-        Intrant.exploitation_id == exploitation_id,
-        Intrant.tenant_id == current_user.tenant_id
-    )
-    
-    if start_date:
-        rendement_query = rendement_query.filter(Rendement.date_recolte >= start_date)
-        meteo_query = meteo_query.filter(MeteoData.date_observation >= start_date)
-        intrant_query = intrant_query.filter(Intrant.date_application >= start_date)
-    
-    if end_date:
-        rendement_query = rendement_query.filter(Rendement.date_recolte <= end_date)
-        meteo_query = meteo_query.filter(MeteoData.date_observation <= end_date)
-        intrant_query = intrant_query.filter(Intrant.date_application <= end_date)
-    
-    # Calculate statistics
-    total_rendements = rendement_query.count()
-    avg_rendement = rendement_query.with_entities(func.avg(Rendement.quantity)).scalar()
-    max_rendement = rendement_query.with_entities(func.max(Rendement.quantity)).scalar()
-    min_rendement = rendement_query.with_entities(func.min(Rendement.quantity)).scalar()
-    total_cost_intrants = intrant_query.with_entities(func.sum(Intrant.cost)).scalar()
-    avg_humidity = meteo_query.with_entities(func.avg(MeteoData.humidity)).scalar()
-    avg_temperature = meteo_query.with_entities(func.avg(MeteoData.temperature_avg)).scalar()
-    
-    return {
-        "total_rendements": total_rendements,
-        "avg_rendement": float(avg_rendement) if avg_rendement else None,
-        "max_rendement": float(max_rendement) if max_rendement else None,
-        "min_rendement": float(min_rendement) if min_rendement else None,
-        "total_cost_intrants": float(total_cost_intrants) if total_cost_intrants else None,
-        "avg_humidity": float(avg_humidity) if avg_humidity else None,
-        "avg_temperature": float(avg_temperature) if avg_temperature else None,
-    }
+    get_accessible_exploitation(current_user, exploitation_id)
 
+    rendements = db.query("rendements", {
+        "exploitation_id": exploitation_id,
+        "tenant_id": current_user.tenant_id
+    })
+
+    meteo_data = db.query("meteo_data", {
+        "exploitation_id": exploitation_id,
+        "tenant_id": current_user.tenant_id
+    })
+
+    intrants = db.query("intrants", {
+        "exploitation_id": exploitation_id,
+        "tenant_id": current_user.tenant_id
+    })
+
+    if start_date or end_date:
+        if start_date:
+            start_str = start_date.isoformat()
+            rendements = [r for r in rendements if r["date_recolte"] >= start_str]
+            meteo_data = [m for m in meteo_data if m["date_observation"] >= start_str]
+            intrants = [i for i in intrants if i.get("date_application") and i["date_application"] >= start_str]
+        if end_date:
+            end_str = end_date.isoformat()
+            rendements = [r for r in rendements if r["date_recolte"] <= end_str]
+            meteo_data = [m for m in meteo_data if m["date_observation"] <= end_str]
+            intrants = [i for i in intrants if i.get("date_application") and i["date_application"] <= end_str]
+
+    total_rendements = len(rendements)
+    avg_rendement = sum(r["quantity"] for r in rendements) / total_rendements if rendements else None
+    max_rendement = max((r["quantity"] for r in rendements), default=None)
+    min_rendement = min((r["quantity"] for r in rendements), default=None)
+
+    total_cost_intrants = sum(i["cost"] for i in intrants if i.get("cost")) if intrants else None
+
+    avg_humidity = sum(m["humidity"] for m in meteo_data if m.get("humidity")) / len([m for m in meteo_data if m.get("humidity")]) if any(m.get("humidity") for m in meteo_data) else None
+    avg_temperature = sum(m["temperature_avg"] for m in meteo_data if m.get("temperature_avg")) / len([m for m in meteo_data if m.get("temperature_avg")]) if any(m.get("temperature_avg") for m in meteo_data) else None
+
+    return StatsResponse(
+        total_rendements=total_rendements,
+        avg_rendement=avg_rendement,
+        max_rendement=max_rendement,
+        min_rendement=min_rendement,
+        total_cost_intrants=total_cost_intrants,
+        avg_humidity=avg_humidity,
+        avg_temperature=avg_temperature
+    )
 
 @router.get("/dashboard")
 async def get_dashboard(
-    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get dashboard summary for all accessible exploitations"""
-    
-    # Get exploitations accessible to user
-    query = db.query(Exploitation).filter(Exploitation.tenant_id == current_user.tenant_id)
-    
+    exploitations = db.query("exploitations", {"tenant_id": current_user.tenant_id})
+
     if current_user.role == "agriculteur":
-        query = query.filter(Exploitation.owner_id == current_user.id)
-    
-    exploitations = query.all()
-    
+        exploitations = [e for e in exploitations if e["owner_id"] == current_user.id]
+
     dashboard_data = {
         "total_exploitations": len(exploitations),
         "exploitations": [],
     }
-    
+
     for expl in exploitations:
+        rendements_count = len(db.query("rendements", {"exploitation_id": expl["id"]}))
+        parcelles_count = len(db.query("parcelles", {"exploitation_id": expl["id"]}))
         expl_data = {
-            "id": expl.id,
-            "name": expl.name,
-            "rendements_count": db.query(Rendement).filter(
-                Rendement.exploitation_id == expl.id
-            ).count(),
-            "parcelles_count": len(expl.parcelles),
+            "id": expl["id"],
+            "name": expl["name"],
+            "rendements_count": rendements_count,
+            "parcelles_count": parcelles_count,
         }
         dashboard_data["exploitations"].append(expl_data)
-    
-    return dashboard_data
 
+    return dashboard_data
 
 @router.get("/health")
 async def analytics_health():
-    """Health check for analytics service"""
     return {"status": "healthy"}
