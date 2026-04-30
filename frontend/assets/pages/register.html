@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Inscription - Agridata</title>
+    <link rel="stylesheet" href="../css/register.css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+</head>
+<body class="bg-gradient-to-br from-green-100 to-blue-100 min-h-screen flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
+        <div class="text-center mb-6">
+            <i class="fas fa-user-plus text-4xl text-green-600"></i>
+            <h2 class="text-2xl font-bold mt-2">Créer un compte</h2>
+        </div>
+        <form id="registerForm" class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Nom complet</label>
+                <input type="text" id="name" required class="w-full mt-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Email</label>
+                <input type="email" id="email" required class="w-full mt-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Mot de passe</label>
+                <input type="password" id="password" required minlength="6" class="w-full mt-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Confirmer le mot de passe</label>
+                <input type="password" id="confirmPassword" required minlength="6" class="w-full mt-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent">
+            </div>
+            <button type="submit" class="w-full bg-green-600 text-white py-2 rounded-lg font-semibold hover:bg-green-700 transition">S'inscrire</button>
+        </form>
+        <p class="mt-4 text-center text-sm text-gray-600">Déjà inscrit ? <a href="login.html" class="text-green-600 font-medium hover:underline">Connectez-vous</a></p>
+        <div id="errorMessage" class="mt-3 text-red-500 text-sm hidden"></div>
+    </div>
+    <script src="../js/register.js"></script>
+</body>
+</html>

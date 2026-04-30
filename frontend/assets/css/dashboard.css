@@ -1,0 +1,9 @@
+aside a.active {
+    background-color: #1e7e34;
+}
+#dataFormSection {
+    transition: all 0.3s ease;
+}
+canvas {
+    max-width: 100%;
+}

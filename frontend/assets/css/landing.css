@@ -1,0 +1,8 @@
+/* Ajustements supplémentaires */
+.hero {
+    background-size: cover;
+    background-position: center;
+}
+nav a:hover {
+    text-decoration: none;
+}
