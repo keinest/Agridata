@@ -1,0 +1,20 @@
+[
+  {
+    "exploitation_name": "Ferme du Vallon",
+    "code": "A01",
+    "surface_ha": 4.5,
+    "culture": "blé"
+  },
+  {
+    "exploitation_name": "Ferme du Vallon",
+    "code": "A02",
+    "surface_ha": 3.2,
+    "culture": "maïs"
+  },
+  {
+    "exploitation_name": "Domaine des Oliviers",
+    "code": "B01",
+    "surface_ha": 6.8,
+    "culture": "vigne"
+  }
+]

@@ -1,7 +1,7 @@
 // Vérifier le token
 const token = localStorage.getItem('access_token');
 if (!token) {
-    window.location.href = 'login.html';
+    window.location.href = '/pages/login.html';
 }
 
 const headers = {
@@ -11,6 +11,7 @@ const headers = {
 
 // Variables globales pour les graphiques
 let weatherChart, soilChart;
+let exploitations = [];
 
 // Initialisation
 document.addEventListener('DOMContentLoaded', () => {
@@ -26,6 +27,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Formulaire d'ajout
     document.getElementById('dataForm').addEventListener('submit', submitData);
     document.getElementById('dataType').addEventListener('change', toggleFields);
+    document.getElementById('dataExploitation').addEventListener('change', (e) => {
+        const selectedId = parseInt(e.target.value, 10);
+        if (selectedId) {
+            loadParcellesForExploitation(selectedId);
+        }
+    });
 });
 
 function initCharts() {
@@ -79,11 +86,31 @@ function initCharts() {
 }
 
 async function fetchDashboardData() {
+    console.log('Chargement des données du dashboard...');
     try {
-        const [weatherRes, soilRes] = await Promise.all([
-            fetch('/api/analytics/weather?hours=24', { headers }),
-            fetch('/api/analytics/soil?hours=24', { headers })
+        const [meRes, dashboardRes, weatherRes, soilRes] = await Promise.all([
+            fetch('/api/auth/me', { headers }),
+            fetch('/api/analytics/dashboard', { headers }),
+            fetch('/api/analytics/weather', { headers }),
+            fetch('/api/analytics/soil', { headers }),
         ]);
+
+        console.log('Réponse /api/auth/me:', meRes.status, meRes.ok);
+        console.log('Réponse /api/analytics/dashboard:', dashboardRes.status, dashboardRes.ok);
+        console.log('Réponse /api/analytics/weather:', weatherRes.status, weatherRes.ok);
+        console.log('Réponse /api/analytics/soil:', soilRes.status, soilRes.ok);
+
+        if (!meRes.ok || !dashboardRes.ok) {
+            throw new Error('Impossible de charger le dashboard');
+        }
+
+        const user = await meRes.json();
+        const dashboardData = await dashboardRes.json();
+        console.log('Utilisateur:', user);
+        console.log('Données dashboard:', dashboardData);
+        renderUserHeader(user);
+        renderDashboardSummary(dashboardData);
+        populateExploitationOptions(dashboardData.exploitations || []);
 
         if (weatherRes.ok) {
             const weatherData = await weatherRes.json();
@@ -96,7 +123,24 @@ async function fetchDashboardData() {
         }
     } catch (error) {
         console.error('Erreur de chargement des données:', error);
+        if (error.message && error.message.includes('Impossible de charger le dashboard')) {
+            window.location.href = '/pages/login.html';
+        }
     }
+}
+
+function renderUserHeader(user) {
+    const title = document.querySelector('main h1');
+    if (title) {
+        title.textContent = `Bienvenue ${user.first_name || user.email}`;
+    }
+}
+
+function renderDashboardSummary(data) {
+    const summary = data.summary || {};
+    document.getElementById('currentTemp').textContent = `${summary.total_exploitations ?? '--'}`;
+    document.getElementById('currentHumidity').textContent = `${summary.total_parcelles ?? '--'}`;
+    document.getElementById('avgPh').textContent = `${summary.total_rendements ?? '--'}`;
 }
 
 function updateWeatherChart(data) {
@@ -119,8 +163,8 @@ function updateSoilChart(data) {
 function updateSummaryCards(weatherData) {
     if (weatherData.length > 0) {
         const last = weatherData[weatherData.length - 1];
-        document.getElementById('currentTemp').textContent = last.temperature.toFixed(1) + ' °C';
-        document.getElementById('currentHumidity').textContent = last.humidity.toFixed(1) + ' %';
+        document.getElementById('currentTemp').textContent = last.temperature_avg ? last.temperature_avg.toFixed(1) + ' °C' : '-- °C';
+        document.getElementById('currentHumidity').textContent = last.humidity ? last.humidity.toFixed(1) + ' %' : '-- %';
     }
     // Pour le pH moyen, on pourrait faire un appel supplémentaire ou le stocker dans le state
     // Ici on le laisse dynamique via l'API soil.
@@ -130,17 +174,30 @@ async function submitData(e) {
     e.preventDefault();
     const type = document.getElementById('dataType').value;
     let payload = { type };
+    const exploitationId = parseInt(document.getElementById('dataExploitation').value, 10);
+    const parcelleId = parseInt(document.getElementById('dataParcelle').value, 10);
 
     if (type === 'weather') {
+        if (!exploitationId) {
+            alert('Sélectionnez une exploitation avant d’ajouter des données météo.');
+            return;
+        }
         payload.temperature = parseFloat(document.getElementById('temperature').value);
         payload.humidity = parseFloat(document.getElementById('humidity').value);
+        payload.exploitation_id = exploitationId;
     } else {
+        if (!parcelleId) {
+            alert('Sélectionnez une parcelle avant d’ajouter des données sol.');
+            return;
+        }
         payload.ph = parseFloat(document.getElementById('ph').value);
         payload.moisture = parseFloat(document.getElementById('soilMoisture').value);
+        payload.parcelle_id = parcelleId;
     }
 
     try {
-        const response = await fetch(`/api/data-collection/${type}`, {
+        const endpoint = type === 'weather' ? '/api/data/meteo/' : '/api/data/sol/';
+        const response = await fetch(endpoint, {
             method: 'POST',
             headers,
             body: JSON.stringify(payload)
@@ -165,9 +222,38 @@ function toggleFields() {
     const type = document.getElementById('dataType').value;
     document.getElementById('weatherFields').classList.toggle('hidden', type !== 'weather');
     document.getElementById('soilFields').classList.toggle('hidden', type !== 'soil');
+    document.getElementById('parcelleSelectWrapper').classList.toggle('hidden', type !== 'soil');
+}
+
+function populateExploitationOptions(options) {
+    exploitations = options;
+    const select = document.getElementById('dataExploitation');
+    const parcelleSelect = document.getElementById('dataParcelle');
+    if (!select) return;
+    select.innerHTML = '<option value="">Choisissez une exploitation</option>' +
+        options.map(ex => `<option value="${ex.id}">${ex.name || 'Exploitation #' + ex.id}</option>`).join('');
+    if (parcelleSelect) {
+        parcelleSelect.innerHTML = '<option value="">Choisissez une parcelle</option>';
+    }
+}
+
+async function loadParcellesForExploitation(exploitationId) {
+    const parcelleSelect = document.getElementById('dataParcelle');
+    if (!parcelleSelect) return;
+    parcelleSelect.innerHTML = '<option value="">Chargement...</option>';
+    try {
+        const res = await fetch(`/api/parcelles?exploitation_id=${exploitationId}`, { headers });
+        if (!res.ok) throw new Error('Impossible de charger les parcelles');
+        const data = await res.json();
+        parcelleSelect.innerHTML = '<option value="">Choisissez une parcelle</option>' +
+            (data.data || data).map(p => `<option value="${p.id}">${p.name || ('Parcelle #' + p.id)}</option>`).join('');
+    } catch (err) {
+        parcelleSelect.innerHTML = '<option value="">Erreur de chargement</option>';
+        console.error(err);
+    }
 }
 
 function logout() {
     localStorage.removeItem('access_token');
-    window.location.href = 'login.html';
+        window.location.href = '/';
 }

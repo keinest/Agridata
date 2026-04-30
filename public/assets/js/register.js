@@ -17,7 +17,13 @@ document.getElementById('registerForm').addEventListener('submit', async functio
         const response = await fetch('/api/auth/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, email, password })
+            body: JSON.stringify({
+                tenant_id: 1,
+                email,
+                password,
+                first_name: name.split(' ')[0] || '',
+                last_name: name.split(' ').slice(1).join(' ') || '',
+            })
         });
 
         if (!response.ok) {
@@ -26,7 +32,7 @@ document.getElementById('registerForm').addEventListener('submit', async functio
         }
 
         alert('Compte créé avec succès ! Vous pouvez vous connecter.');
-        window.location.href = 'login.html';
+        window.location.href = '/pages/login.html';
     } catch (error) {
         errorDiv.textContent = error.message;
         errorDiv.classList.remove('hidden');

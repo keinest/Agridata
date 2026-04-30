@@ -9,7 +9,11 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
         const response = await fetch('/api/auth/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password })
+            body: JSON.stringify({
+                tenant_id: 1,
+                email,
+                password,
+            })
         });
 
         if (!response.ok) {
@@ -19,7 +23,8 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
 
         const data = await response.json();
         localStorage.setItem('access_token', data.access_token);
-        window.location.href = 'dashboard.html';
+        alert('Connexion réussie, redirection vers le dashboard...');
+        window.location.href = '/pages/dashboard.html';
     } catch (error) {
         errorDiv.textContent = error.message;
         errorDiv.classList.remove('hidden');

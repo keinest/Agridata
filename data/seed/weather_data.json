@@ -1,0 +1,32 @@
+[
+  {
+    "timestamp": "2025-04-29T08:00:00Z",
+    "temperature": 14.2,
+    "humidity": 78,
+    "parcelle_code": "A01"
+  },
+  {
+    "timestamp": "2025-04-29T09:00:00Z",
+    "temperature": 15.1,
+    "humidity": 74,
+    "parcelle_code": "A01"
+  },
+  {
+    "timestamp": "2025-04-29T10:00:00Z",
+    "temperature": 16.8,
+    "humidity": 68,
+    "parcelle_code": "A01"
+  },
+  {
+    "timestamp": "2025-04-29T08:00:00Z",
+    "temperature": 20.5,
+    "humidity": 55,
+    "parcelle_code": "B01"
+  },
+  {
+    "timestamp": "2025-04-29T09:00:00Z",
+    "temperature": 21.3,
+    "humidity": 52,
+    "parcelle_code": "B01"
+  }
+]

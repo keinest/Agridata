@@ -1,5 +1,7 @@
 """Data collection routes: rendements, meteo, sol_qualite, intrants."""
-from flask import Blueprint, g, jsonify, request
+import csv
+import io
+from flask import Blueprint, g, jsonify, request, Response
 
 from backend.app.api.dependencies import (
     get_accessible_exploitation,
@@ -237,3 +239,39 @@ def delete_intrant(intrant_id: int):
         return jsonify({"detail": "Intrant not found"}), 404
     db.delete("intrants", intrant_id)
     return jsonify({"detail": "Intrant deleted"})
+
+
+# ─────────────────────────────── EXPORT DATA ────────────────────────────────
+
+@data_collection_bp.get("/export/<table_name>")
+@require_auth
+def export_data(table_name: str):
+    user = g.current_user
+
+    # Validate table name
+    allowed_tables = ["rendements", "meteo_data", "sol_qualite", "intrants"]
+    if table_name not in allowed_tables:
+        return jsonify({"detail": "Invalid table name"}), 400
+
+    # Get data
+    data = db.query(table_name, {"tenant_id": user.tenant_id})
+    if not data:
+        return jsonify({"detail": "No data found"}), 404
+
+    # Create CSV
+    output = io.StringIO()
+    if data:
+        fieldnames = data[0].keys()
+        writer = csv.DictWriter(output, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in data:
+            writer.writerow(row)
+
+    csv_data = output.getvalue()
+    output.close()
+
+    return Response(
+        csv_data,
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment;filename={table_name}.csv"}
+    )

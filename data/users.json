@@ -1,0 +1,39 @@
+[
+  {
+    "tenant_id": 1,
+    "email": "admin@demo.com",
+    "password_hash": "$2b$12$2zDqGFucacj4Ig0vrXN3re5Hn4wCEDTuJOcR8IuhI3DhqwHy8avTi",
+    "first_name": "Admin",
+    "last_name": "User",
+    "role": "admin",
+    "active": true,
+    "id": 1,
+    "created_at": "2026-04-30T10:57:37.205490",
+    "updated_at": "2026-04-30T14:07:44.289300",
+    "last_login": "2026-04-30T14:07:44.289084"
+  },
+  {
+    "tenant_id": 1,
+    "email": "skr@gmail.com",
+    "password_hash": "$2b$12$S6hnplDS9gPLg8P2CGX0IeZizsPTH5yT8CCx8SUlpewWxu.gxvWtS",
+    "first_name": "Ladry",
+    "last_name": "",
+    "role": "agriculteur",
+    "active": true,
+    "id": 2,
+    "created_at": "2026-04-30T11:46:16.748172",
+    "updated_at": "2026-04-30T11:46:16.748188"
+  },
+  {
+    "tenant_id": 1,
+    "email": "soul@gmail.com",
+    "password_hash": "$2b$12$H6gWJG4AqYujTBKQqi2Jje83gN3W/HAPiHzJIfkXaDNuaixZKmYua",
+    "first_name": "Soul",
+    "last_name": "",
+    "role": "agriculteur",
+    "active": true,
+    "id": 3,
+    "created_at": "2026-04-30T12:05:14.265034",
+    "updated_at": "2026-04-30T12:05:14.265045"
+  }
+]

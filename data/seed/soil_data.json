@@ -1,0 +1,20 @@
+[
+  {
+    "timestamp": "2025-04-29T08:00:00Z",
+    "ph": 6.8,
+    "moisture": 32.5,
+    "parcelle_code": "A01"
+  },
+  {
+    "timestamp": "2025-04-29T09:00:00Z",
+    "ph": 6.7,
+    "moisture": 31.8,
+    "parcelle_code": "A01"
+  },
+  {
+    "timestamp": "2025-04-29T08:00:00Z",
+    "ph": 7.2,
+    "moisture": 28.1,
+    "parcelle_code": "B01"
+  }
+]

@@ -1,5 +1,6 @@
 """Configuration de l'application Flask AgriData."""
 import os
+import secrets
 from typing import List, Optional
 
 from pydantic import Field, field_validator
@@ -25,7 +26,7 @@ class Settings(BaseSettings):
     DATA_DIR: str = "data"
 
     # Security
-    SECRET_KEY: str = "dev-secret-key-change-in-production"
+    SECRET_KEY: str = Field(default_factory=lambda: secrets.token_urlsafe(48))
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7

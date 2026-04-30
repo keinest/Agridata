@@ -1,5 +1,6 @@
 """AgriData Platform — Flask application factory."""
 import logging
+import os
 import time
 import uuid
 
@@ -21,6 +22,10 @@ def create_app() -> Flask:
     app = Flask(__name__)
     app.config["SECRET_KEY"] = settings.SECRET_KEY
     app.config["JSON_SORT_KEYS"] = False
+
+    # Configure static files
+    app.static_folder = '../../public'
+    app.static_url_path = '/'
 
     # ── CORS ──────────────────────────────────────────────────────────────
     CORS(
@@ -90,12 +95,16 @@ def create_app() -> Flask:
     from backend.app.api.data_collection import data_collection_bp
     from backend.app.api.exploitations import exploitations_bp
     from backend.app.api.parcelles import parcelles_bp
+    from backend.app.api.alertes import alertes_bp
+    from backend.app.api.rapports import rapports_bp
 
     app.register_blueprint(auth_bp, url_prefix=f"{prefix}/auth")
     app.register_blueprint(exploitations_bp, url_prefix=f"{prefix}/exploitations")
     app.register_blueprint(parcelles_bp, url_prefix=f"{prefix}/parcelles")
     app.register_blueprint(data_collection_bp, url_prefix=f"{prefix}/data")
     app.register_blueprint(analytics_bp, url_prefix=f"{prefix}/analytics")
+    app.register_blueprint(alertes_bp, url_prefix=f"{prefix}/alertes")
+    app.register_blueprint(rapports_bp, url_prefix=f"{prefix}/rapports")
 
     # ── Health & root routes ──────────────────────────────────────────────
     @app.get("/health")
@@ -104,20 +113,18 @@ def create_app() -> Flask:
 
     @app.get("/")
     def root():
-        return jsonify(
-            {
-                "message": "Welcome to AgriData Platform",
-                "version": settings.APP_VERSION,
-                "docs": "/api/docs",
-                "endpoints": {
-                    "auth": f"{prefix}/auth",
-                    "exploitations": f"{prefix}/exploitations",
-                    "parcelles": f"{prefix}/parcelles",
-                    "data": f"{prefix}/data",
-                    "analytics": f"{prefix}/analytics",
-                },
-            }
-        )
+        from flask import send_from_directory
+        return send_from_directory(app.static_folder, 'pages/index.html')
+
+    @app.route('/<path:filename>')
+    def serve_static(filename):
+        from flask import send_from_directory, abort
+        if filename.startswith('api/'):
+            abort(404)
+        try:
+            return send_from_directory(app.static_folder, filename)
+        except FileNotFoundError:
+            abort(404)
 
     logger.info("Starting up AgriData Platform (Flask) v%s", settings.APP_VERSION)
     return app
