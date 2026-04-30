@@ -1,10 +1,48 @@
-fastapi==0.117.1
-uvicorn[standard]==0.38.0
-python-dotenv==1.1.1
-pydantic==2.12.3
-pydantic-settings==2.11.0
-python-jose[cryptography]==3.5.0
+# ============================================================
+# AgriData Platform — Flask Version
+# ============================================================
+#
+# INSTALLATION
+# ------------
+# 1. Créer et activer un environnement virtuel :
+#       python3 -m venv .venv
+#       source .venv/bin/activate          # Linux / macOS
+#       .venv\Scripts\activate             # Windows
+#
+# 2. Installer les dépendances :
+#       pip install -r requirements.txt
+#
+# 3. Lancer l'application localement :
+#       python deploy.py         (menu interactif)
+#   ou directement :
+#       flask --app backend.app.main:app run --reload --port 8000
+#   ou avec gunicorn (production locale) :
+#       gunicorn "backend.app.main:app" --bind 0.0.0.0:8000 --workers 4
+#
+# DÉPLOIEMENT VERCEL
+# ------------------
+#   vercel deploy --prod
+#
+# ============================================================
+
+# ── Core web framework ───────────────────────────────────────
+Flask==3.1.0
+flask-cors==5.0.0
+
+# ── WSGI server (production / local) ────────────────────────
+gunicorn==23.0.0
+
+# ── Validation & settings ───────────────────────────────────
+pydantic==2.11.3
+pydantic-settings==2.9.1
+email-validator==2.2.0
+
+# ── Security — JWT ──────────────────────────────────────────
+python-jose[cryptography]==3.3.0
+
+# ── Security — password hashing ─────────────────────────────
 passlib[bcrypt]==1.7.4
-bcrypt==4.0.1
-python-multipart==0.0.20
-email-validator==2.3.0
+bcrypt==3.2.2
+
+# ── Environment variables ───────────────────────────────────
+python-dotenv==1.1.0

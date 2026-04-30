@@ -1,51 +1,58 @@
-from fastapi import HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from fastapi import Depends
-from app.application.auth_service import AuthService, AuthorizationService
-from app.database import db
-from app.infrastructure.models import Exploitation, Parcelle, User
+"""Flask authentication decorators and dependency helpers."""
+from functools import wraps
 
-security = HTTPBearer(auto_error=False)
+from flask import g, jsonify, request
 
-def get_current_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(security),
-) -> User:
-    if credentials is None or credentials.scheme.lower() != "bearer":
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
-        )
+from backend.app.application.auth_service import AuthService, AuthorizationService
+from backend.app.database import db
+from backend.app.domain.exceptions import UnauthorizedError
+from backend.app.infrastructure.models import Exploitation, Parcelle
 
-    try:
-        return AuthService.get_user_from_token(credentials.credentials)
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(exc),
-        ) from exc
 
-def get_accessible_exploitation(
-    current_user: User,
-    exploitation_id: int,
-) -> Exploitation:
+def _extract_token() -> str | None:
+    auth_header = request.headers.get("Authorization", "")
+    parts = auth_header.split()
+    if len(parts) == 2 and parts[0].lower() == "bearer":
+        return parts[1]
+    return None
+
+
+def require_auth(f):
+    """Decorator: validates JWT and sets g.current_user."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = _extract_token()
+        if not token:
+            return jsonify({"detail": "Not authenticated"}), 401
+        try:
+            user = AuthService.get_user_from_token(token)
+        except Exception as exc:
+            return jsonify({"detail": str(exc)}), 401
+        g.current_user = user
+        return f(*args, **kwargs)
+    return decorated
+
+
+def get_accessible_exploitation(exploitation_id: int):
+    """Return Exploitation if current user may access it, else abort."""
     exploitation_data = db.get_by_id("exploitations", exploitation_id)
-    if not exploitation_data or exploitation_data.get("tenant_id") != current_user.tenant_id:
-        raise HTTPException(status_code=404, detail="Exploitation not found")
-
+    if not exploitation_data:
+        return None, (jsonify({"detail": "Exploitation not found"}), 404)
     exploitation = Exploitation(**exploitation_data)
-    if not AuthorizationService.can_access_exploitation(current_user, exploitation):
-        raise HTTPException(status_code=403, detail="Access denied")
+    if exploitation.tenant_id != g.current_user.tenant_id:
+        return None, (jsonify({"detail": "Access denied"}), 403)
+    if not AuthorizationService.can_access_exploitation(g.current_user, exploitation):
+        return None, (jsonify({"detail": "Access denied"}), 403)
+    return exploitation, None
 
-    return exploitation
 
-def get_accessible_parcelle(
-    current_user: User,
-    parcelle_id: int,
-) -> Parcelle:
+def get_accessible_parcelle(parcelle_id: int):
+    """Return Parcelle if current user may access it, else abort."""
     parcelle_data = db.get_by_id("parcelles", parcelle_id)
-    if not parcelle_data or parcelle_data.get("tenant_id") != current_user.tenant_id:
-        raise HTTPException(status_code=404, detail="Parcelle not found")
-
+    if not parcelle_data:
+        return None, (jsonify({"detail": "Parcelle not found"}), 404)
     parcelle = Parcelle(**parcelle_data)
-    exploitation = get_accessible_exploitation(current_user, parcelle.exploitation_id)
-    return parcelle
+    exploitation, err = get_accessible_exploitation(parcelle.exploitation_id)
+    if err:
+        return None, err
+    return parcelle, None

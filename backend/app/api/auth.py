@@ -1,122 +1,132 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+"""Authentication routes: login, register, token refresh, profile."""
 from datetime import timedelta
-from pydantic import BaseModel, EmailStr
-from app.api.dependencies import get_current_user
-from app.application.auth_service import AuthService
-from app.config import settings
-from app.infrastructure.models import User
 
-router = APIRouter()
+from flask import Blueprint, g, jsonify, request
 
-class LoginRequest(BaseModel):
-    tenant_id: int
-    email: EmailStr
-    password: str
+from backend.app.api.dependencies import require_auth
+from backend.app.application.auth_service import AuthService
+from backend.app.config import settings
+from backend.app.domain.exceptions import InvalidCredentialsError
 
-class RegisterRequest(BaseModel):
-    tenant_id: int
-    email: EmailStr
-    password: str
-    first_name: str
-    last_name: str
-
-class TokenResponse(BaseModel):
-    access_token: str
-    refresh_token: str
-    token_type: str = "bearer"
-
-class RefreshRequest(BaseModel):
-    refresh_token: str
-
-class UserResponse(BaseModel):
-    id: int
-    email: str
-    first_name: str
-    last_name: str
-    role: str
-
-    class Config:
-        from_attributes = True
+auth_bp = Blueprint("auth", __name__)
 
 
-@router.post("/login", response_model=TokenResponse)
-async def login(request: LoginRequest):
+@auth_bp.post("/login")
+def login():
+    body = request.get_json(silent=True) or {}
+    tenant_id = body.get("tenant_id")
+    email = body.get("email")
+    password = body.get("password")
+
+    if not all([tenant_id, email, password]):
+        return jsonify({"detail": "tenant_id, email and password are required"}), 400
+
     try:
-        user = AuthService.authenticate_user(request.tenant_id, request.email, request.password)
-
-        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-        access_token = AuthService.create_access_token(
-            data={"sub": str(user.id), "tenant_id": user.tenant_id, "role": user.role},
-            expires_delta=access_token_expires
+        user, access_token, refresh_token = AuthService.authenticate_user(
+            int(tenant_id), email, password
         )
-        refresh_token = AuthService.create_refresh_token(
-            data={"sub": str(user.id), "tenant_id": user.tenant_id}
-        )
+    except InvalidCredentialsError as exc:
+        return jsonify({"detail": str(exc)}), 401
+    except Exception as exc:
+        return jsonify({"detail": str(exc)}), 401
 
-        return {
+    return jsonify(
+        {
             "access_token": access_token,
             "refresh_token": refresh_token,
+            "token_type": "bearer",
         }
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(e)
-        )
+    )
 
-@router.post("/register", response_model=TokenResponse)
-async def register(request: RegisterRequest):
+
+@auth_bp.post("/register")
+def register():
+    body = request.get_json(silent=True) or {}
+    tenant_id = body.get("tenant_id")
+    email = body.get("email")
+    password = body.get("password")
+    first_name = body.get("first_name")
+    last_name = body.get("last_name")
+
+    if not all([tenant_id, email, password]):
+        return jsonify({"detail": "tenant_id, email and password are required"}), 400
+
     try:
         user = AuthService.create_user(
-            request.tenant_id,
-            request.email,
-            request.password,
-            request.first_name,
-            request.last_name
+            int(tenant_id), email, password, first_name, last_name
         )
+    except ValueError as exc:
+        return jsonify({"detail": str(exc)}), 400
+    except Exception as exc:
+        return jsonify({"detail": str(exc)}), 400
 
-        access_token = AuthService.create_access_token(
-            data={"sub": str(user.id), "tenant_id": user.tenant_id, "role": user.role}
-        )
-        refresh_token = AuthService.create_refresh_token(
-            data={"sub": str(user.id), "tenant_id": user.tenant_id}
-        )
+    access_token = AuthService.create_access_token(
+        {
+            "sub": str(user.id),
+            "tenant_id": user.tenant_id,
+            "role": user.role,
+        },
+        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
+    refresh_token = AuthService.create_refresh_token(
+        {"sub": str(user.id), "tenant_id": user.tenant_id}
+    )
+    return (
+        jsonify(
+            {
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "token_type": "bearer",
+            }
+        ),
+        201,
+    )
 
-        return {
-            "access_token": access_token,
-            "refresh_token": refresh_token,
-        }
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
 
-@router.post("/refresh", response_model=TokenResponse)
-async def refresh(request: RefreshRequest):
+@auth_bp.post("/refresh")
+def refresh():
+    body = request.get_json(silent=True) or {}
+    token = body.get("refresh_token")
+    if not token:
+        return jsonify({"detail": "refresh_token is required"}), 400
+
     try:
-        payload = AuthService.verify_token(request.refresh_token)
+        payload = AuthService.verify_token(token)
         if payload.get("type") != "refresh":
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid refresh token"
-            )
-
+            raise ValueError("Invalid refresh token")
         user = AuthService.get_user_from_payload(payload)
+    except Exception as exc:
+        return jsonify({"detail": "Invalid refresh token"}), 401
 
-        access_token = AuthService.create_access_token(
-            data={"sub": str(user.id), "tenant_id": user.tenant_id, "role": user.role}
-        )
-
-        return {
+    access_token = AuthService.create_access_token(
+        {"sub": str(user.id), "tenant_id": user.tenant_id, "role": user.role}
+    )
+    new_refresh_token = AuthService.create_refresh_token(
+        {"sub": str(user.id), "tenant_id": user.tenant_id}
+    )
+    return jsonify(
+        {
             "access_token": access_token,
-            "refresh_token": request.refresh_token,
+            "refresh_token": new_refresh_token,
+            "token_type": "bearer",
         }
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(e)
-        )
+    )
 
-@router.get("/me", response_model=UserResponse)
-async def get_me(current_user: User = Depends(get_current_user)):
-    return current_user
+
+@auth_bp.get("/me")
+@require_auth
+def get_me():
+    user = g.current_user
+    return jsonify(
+        {
+            "id": user.id,
+            "tenant_id": user.tenant_id,
+            "email": user.email,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "role": user.role,
+            "avatar_url": user.avatar_url,
+            "last_login": user.last_login,
+            "created_at": user.created_at,
+        }
+    )

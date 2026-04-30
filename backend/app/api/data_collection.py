@@ -1,311 +1,239 @@
-from fastapi import APIRouter, Depends, HTTPException
-from typing import List, Optional
-from datetime import date
-from pydantic import BaseModel
-from app.api.dependencies import (
+"""Data collection routes: rendements, meteo, sol_qualite, intrants."""
+from flask import Blueprint, g, jsonify, request
+
+from backend.app.api.dependencies import (
     get_accessible_exploitation,
     get_accessible_parcelle,
-    get_current_user,
+    require_auth,
 )
-from app.database import db
-from app.infrastructure.models import (
-    Rendement, MeteoData, SolQualite, Intrant, User
-)
+from backend.app.database import db
 
-router = APIRouter()
+data_collection_bp = Blueprint("data_collection", __name__)
 
-class RendementCreate(BaseModel):
-    parcelle_id: int
-    date_recolte: date
-    quantity: float
-    unit: str = "kg"
-    crop_type: Optional[str] = None
-    quality_rating: Optional[int] = None
-    notes: Optional[str] = None
 
-class RendementResponse(BaseModel):
-    id: int
-    parcelle_id: int
-    exploitation_id: int
-    date_recolte: date
-    quantity: float
-    unit: str
-    crop_type: Optional[str]
-    quality_rating: Optional[int]
+# ─────────────────────────────── RENDEMENTS ────────────────────────────────
 
-    class Config:
-        from_attributes = True
+@data_collection_bp.post("/rendements/")
+@require_auth
+def create_rendement():
+    user = g.current_user
+    body = request.get_json(silent=True) or {}
 
-@router.post("/rendements/", response_model=RendementResponse)
-async def create_rendement(
-    request: RendementCreate,
-    current_user: User = Depends(get_current_user)
-):
-    parcelle = get_accessible_parcelle(current_user, request.parcelle_id)
+    parcelle_id = body.get("parcelle_id")
+    if not parcelle_id:
+        return jsonify({"detail": "'parcelle_id' is required"}), 400
+
+    parcelle, err = get_accessible_parcelle(int(parcelle_id))
+    if err:
+        return err
 
     rendement_data = {
-        "parcelle_id": request.parcelle_id,
+        "tenant_id": user.tenant_id,
+        "parcelle_id": parcelle.id,
         "exploitation_id": parcelle.exploitation_id,
-        "tenant_id": current_user.tenant_id,
-        "date_recolte": request.date_recolte.isoformat(),
-        "quantity": request.quantity,
-        "unit": request.unit,
-        "crop_type": request.crop_type,
-        "quality_rating": request.quality_rating,
-        "notes": request.notes,
+        "date_recolte": body.get("date_recolte", ""),
+        "quantity": body.get("quantity"),
+        "unit": body.get("unit"),
+        "crop_type": body.get("crop_type"),
+        "quality_rating": body.get("quality_rating"),
+        "notes": body.get("notes"),
     }
-
     result = db.insert("rendements", rendement_data)
-    return RendementResponse(**result)
+    return jsonify(result), 201
 
-@router.get("/rendements/", response_model=List[RendementResponse])
-async def list_rendements(
-    parcelle_id: Optional[int] = None,
-    current_user: User = Depends(get_current_user)
-):
-    filters = {"tenant_id": current_user.tenant_id}
+
+@data_collection_bp.get("/rendements/")
+@require_auth
+def list_rendements():
+    user = g.current_user
+    parcelle_id = request.args.get("parcelle_id", type=int)
+
+    filters: dict = {"tenant_id": user.tenant_id}
     if parcelle_id:
         filters["parcelle_id"] = parcelle_id
 
     rendements_data = db.query("rendements", filters)
-    return [RendementResponse(**r) for r in sorted(rendements_data, key=lambda x: x["date_recolte"], reverse=True)]
+    return jsonify(sorted(rendements_data, key=lambda r: r.get("date_recolte", ""), reverse=True))
 
-@router.delete("/rendements/{rendement_id}")
-async def delete_rendement(
-    rendement_id: int,
-    current_user: User = Depends(get_current_user)
-):
-    rendement_data = db.get_by_id("rendements", rendement_id)
-    if not rendement_data or rendement_data.get("tenant_id") != current_user.tenant_id:
-        raise HTTPException(status_code=404, detail="Rendement not found")
 
-    get_accessible_exploitation(current_user, rendement_data["exploitation_id"])
+@data_collection_bp.delete("/rendements/<int:rendement_id>")
+@require_auth
+def delete_rendement(rendement_id: int):
+    user = g.current_user
+    rendement = db.get_by_id("rendements", rendement_id)
+    if not rendement or rendement.get("tenant_id") != user.tenant_id:
+        return jsonify({"detail": "Rendement not found"}), 404
     db.delete("rendements", rendement_id)
-    return {"detail": "Rendement deleted"}
+    return jsonify({"detail": "Rendement deleted"})
 
-class MeteoDataCreate(BaseModel):
-    exploitation_id: int
-    date_observation: date
-    temperature_min: Optional[float] = None
-    temperature_max: Optional[float] = None
-    temperature_avg: Optional[float] = None
-    precipitation: Optional[float] = None
-    humidity: Optional[int] = None
-    wind_speed: Optional[float] = None
-    pressure: Optional[float] = None
 
-class MeteoDataResponse(BaseModel):
-    id: int
-    exploitation_id: int
-    date_observation: date
-    temperature_min: Optional[float]
-    temperature_max: Optional[float]
-    temperature_avg: Optional[float]
-    precipitation: Optional[float]
-    humidity: Optional[int]
+# ─────────────────────────────── METEO DATA ────────────────────────────────
 
-    class Config:
-        from_attributes = True
+@data_collection_bp.post("/meteo/")
+@require_auth
+def create_meteo():
+    user = g.current_user
+    body = request.get_json(silent=True) or {}
 
-@router.post("/meteo/", response_model=MeteoDataResponse)
-async def create_meteo(
-    request: MeteoDataCreate,
-    current_user: User = Depends(get_current_user)
-):
-    get_accessible_exploitation(current_user, request.exploitation_id)
+    exploitation_id = body.get("exploitation_id")
+    if not exploitation_id:
+        return jsonify({"detail": "'exploitation_id' is required"}), 400
+
+    exploitation, err = get_accessible_exploitation(int(exploitation_id))
+    if err:
+        return err
 
     meteo_data = {
-        "exploitation_id": request.exploitation_id,
-        "tenant_id": current_user.tenant_id,
-        "date_observation": request.date_observation.isoformat(),
-        "temperature_min": request.temperature_min,
-        "temperature_max": request.temperature_max,
-        "temperature_avg": request.temperature_avg,
-        "precipitation": request.precipitation,
-        "humidity": request.humidity,
-        "wind_speed": request.wind_speed,
-        "pressure": request.pressure,
-        "source": "manual"
+        "tenant_id": user.tenant_id,
+        "exploitation_id": exploitation.id,
+        "date_observation": body.get("date_observation", ""),
+        "temperature_min": body.get("temperature_min"),
+        "temperature_max": body.get("temperature_max"),
+        "temperature_avg": body.get("temperature_avg"),
+        "precipitation": body.get("precipitation"),
+        "humidity": body.get("humidity"),
+        "wind_speed": body.get("wind_speed"),
+        "pressure": body.get("pressure"),
+        "source": body.get("source", "manual"),
     }
-
     result = db.insert("meteo_data", meteo_data)
-    return MeteoDataResponse(**result)
+    return jsonify(result), 201
 
-@router.get("/meteo/", response_model=List[MeteoDataResponse])
-async def list_meteo(
-    exploitation_id: Optional[int] = None,
-    current_user: User = Depends(get_current_user)
-):
-    filters = {"tenant_id": current_user.tenant_id}
+
+@data_collection_bp.get("/meteo/")
+@require_auth
+def list_meteo():
+    user = g.current_user
+    exploitation_id = request.args.get("exploitation_id", type=int)
+
+    filters: dict = {"tenant_id": user.tenant_id}
     if exploitation_id:
         filters["exploitation_id"] = exploitation_id
 
     meteo_data = db.query("meteo_data", filters)
-    return [MeteoDataResponse(**m) for m in sorted(meteo_data, key=lambda x: x["date_observation"], reverse=True)]
+    return jsonify(sorted(meteo_data, key=lambda m: m.get("date_observation", ""), reverse=True))
 
-@router.delete("/meteo/{meteo_id}")
-async def delete_meteo(
-    meteo_id: int,
-    current_user: User = Depends(get_current_user)
-):
-    meteo_data = db.get_by_id("meteo_data", meteo_id)
-    if not meteo_data or meteo_data.get("tenant_id") != current_user.tenant_id:
-        raise HTTPException(status_code=404, detail="Meteo data not found")
 
-    get_accessible_exploitation(current_user, meteo_data["exploitation_id"])
+@data_collection_bp.delete("/meteo/<int:meteo_id>")
+@require_auth
+def delete_meteo(meteo_id: int):
+    user = g.current_user
+    record = db.get_by_id("meteo_data", meteo_id)
+    if not record or record.get("tenant_id") != user.tenant_id:
+        return jsonify({"detail": "Meteo data not found"}), 404
     db.delete("meteo_data", meteo_id)
-    return {"detail": "Meteo data deleted"}
+    return jsonify({"detail": "Meteo data deleted"})
 
-class SolQualiteCreate(BaseModel):
-    parcelle_id: int
-    date_analyse: date
-    ph: Optional[float] = None
-    azote: Optional[float] = None
-    phosphore: Optional[float] = None
-    potassium: Optional[float] = None
-    matiere_organique: Optional[float] = None
-    calcium: Optional[float] = None
-    magnesium: Optional[float] = None
-    notes: Optional[str] = None
 
-class SolQualiteResponse(BaseModel):
-    id: int
-    parcelle_id: int
-    exploitation_id: int
-    date_analyse: date
-    ph: Optional[float]
-    azote: Optional[float]
-    phosphore: Optional[float]
-    potassium: Optional[float]
-    matiere_organique: Optional[float]
-    calcium: Optional[float]
-    magnesium: Optional[float]
+# ─────────────────────────────── SOL QUALITE ───────────────────────────────
 
-    class Config:
-        from_attributes = True
+@data_collection_bp.post("/sol/")
+@require_auth
+def create_sol_qualite():
+    user = g.current_user
+    body = request.get_json(silent=True) or {}
 
-@router.post("/sol/", response_model=SolQualiteResponse)
-async def create_sol_qualite(
-    request: SolQualiteCreate,
-    current_user: User = Depends(get_current_user)
-):
-    parcelle = get_accessible_parcelle(current_user, request.parcelle_id)
+    parcelle_id = body.get("parcelle_id")
+    if not parcelle_id:
+        return jsonify({"detail": "'parcelle_id' is required"}), 400
+
+    parcelle, err = get_accessible_parcelle(int(parcelle_id))
+    if err:
+        return err
 
     sol_data = {
-        "parcelle_id": request.parcelle_id,
+        "tenant_id": user.tenant_id,
+        "parcelle_id": parcelle.id,
         "exploitation_id": parcelle.exploitation_id,
-        "tenant_id": current_user.tenant_id,
-        "date_analyse": request.date_analyse.isoformat(),
-        "ph": request.ph,
-        "azote": request.azote,
-        "phosphore": request.phosphore,
-        "potassium": request.potassium,
-        "matiere_organique": request.matiere_organique,
-        "calcium": request.calcium,
-        "magnesium": request.magnesium,
-        "notes": request.notes,
+        "date_analyse": body.get("date_analyse", ""),
+        "ph": body.get("ph"),
+        "azote": body.get("azote"),
+        "phosphore": body.get("phosphore"),
+        "potassium": body.get("potassium"),
+        "matiere_organique": body.get("matiere_organique"),
+        "calcium": body.get("calcium"),
+        "magnesium": body.get("magnesium"),
     }
-
     result = db.insert("sol_qualite", sol_data)
-    return SolQualiteResponse(**result)
+    return jsonify(result), 201
 
-@router.get("/sol/", response_model=List[SolQualiteResponse])
-async def list_sol_qualite(
-    parcelle_id: Optional[int] = None,
-    current_user: User = Depends(get_current_user)
-):
-    filters = {"tenant_id": current_user.tenant_id}
+
+@data_collection_bp.get("/sol/")
+@require_auth
+def list_sol_qualite():
+    user = g.current_user
+    parcelle_id = request.args.get("parcelle_id", type=int)
+
+    filters: dict = {"tenant_id": user.tenant_id}
     if parcelle_id:
         filters["parcelle_id"] = parcelle_id
 
     sol_data = db.query("sol_qualite", filters)
-    return [SolQualiteResponse(**s) for s in sorted(sol_data, key=lambda x: x["date_analyse"], reverse=True)]
+    return jsonify(sol_data)
 
-@router.delete("/sol/{sol_id}")
-async def delete_sol_qualite(
-    sol_id: int,
-    current_user: User = Depends(get_current_user)
-):
-    sol_data = db.get_by_id("sol_qualite", sol_id)
-    if not sol_data or sol_data.get("tenant_id") != current_user.tenant_id:
-        raise HTTPException(status_code=404, detail="Sol data not found")
 
-    get_accessible_exploitation(current_user, sol_data["exploitation_id"])
+@data_collection_bp.delete("/sol/<int:sol_id>")
+@require_auth
+def delete_sol_qualite(sol_id: int):
+    user = g.current_user
+    record = db.get_by_id("sol_qualite", sol_id)
+    if not record or record.get("tenant_id") != user.tenant_id:
+        return jsonify({"detail": "Sol data not found"}), 404
     db.delete("sol_qualite", sol_id)
-    return {"detail": "Sol data deleted"}
+    return jsonify({"detail": "Sol data deleted"})
 
-class IntrantCreate(BaseModel):
-    exploitation_id: int
-    parcelle_id: Optional[int] = None
-    type: Optional[str] = None
-    name: str
-    quantity: Optional[float] = None
-    unit: Optional[str] = None
-    date_application: Optional[date] = None
-    cost: Optional[float] = None
-    effectiveness: Optional[int] = None
-    notes: Optional[str] = None
 
-class IntrantResponse(BaseModel):
-    id: int
-    exploitation_id: int
-    parcelle_id: Optional[int]
-    type: Optional[str]
-    name: str
-    quantity: Optional[float]
-    unit: Optional[str]
-    date_application: Optional[date]
-    cost: Optional[float]
-    effectiveness: Optional[int]
+# ─────────────────────────────── INTRANTS ──────────────────────────────────
 
-    class Config:
-        from_attributes = True
+@data_collection_bp.post("/intrants/")
+@require_auth
+def create_intrant():
+    user = g.current_user
+    body = request.get_json(silent=True) or {}
 
-@router.post("/intrants/", response_model=IntrantResponse)
-async def create_intrant(
-    request: IntrantCreate,
-    current_user: User = Depends(get_current_user)
-):
-    get_accessible_exploitation(current_user, request.exploitation_id)
+    parcelle_id = body.get("parcelle_id")
+    if not parcelle_id:
+        return jsonify({"detail": "'parcelle_id' is required"}), 400
+
+    parcelle, err = get_accessible_parcelle(int(parcelle_id))
+    if err:
+        return err
 
     intrant_data = {
-        "exploitation_id": request.exploitation_id,
-        "tenant_id": current_user.tenant_id,
-        "parcelle_id": request.parcelle_id,
-        "type": request.type,
-        "name": request.name,
-        "quantity": request.quantity,
-        "unit": request.unit,
-        "date_application": request.date_application.isoformat() if request.date_application else None,
-        "cost": request.cost,
-        "effectiveness": request.effectiveness,
-        "notes": request.notes,
+        "tenant_id": user.tenant_id,
+        "parcelle_id": parcelle.id,
+        "exploitation_id": parcelle.exploitation_id,
+        "type": body.get("type", ""),
+        "name": body.get("name", ""),
+        "quantity": body.get("quantity"),
+        "date_application": body.get("date_application", ""),
+        "cost": body.get("cost"),
+        "effectiveness": body.get("effectiveness"),
     }
-
     result = db.insert("intrants", intrant_data)
-    return IntrantResponse(**result)
+    return jsonify(result), 201
 
-@router.get("/intrants/", response_model=List[IntrantResponse])
-async def list_intrants(
-    exploitation_id: Optional[int] = None,
-    current_user: User = Depends(get_current_user)
-):
-    filters = {"tenant_id": current_user.tenant_id}
-    if exploitation_id:
-        filters["exploitation_id"] = exploitation_id
+
+@data_collection_bp.get("/intrants/")
+@require_auth
+def list_intrants():
+    user = g.current_user
+    parcelle_id = request.args.get("parcelle_id", type=int)
+
+    filters: dict = {"tenant_id": user.tenant_id}
+    if parcelle_id:
+        filters["parcelle_id"] = parcelle_id
 
     intrants_data = db.query("intrants", filters)
-    return [IntrantResponse(**i) for i in sorted(intrants_data, key=lambda x: x.get("date_application") or "", reverse=True)]
+    return jsonify(intrants_data)
 
-@router.delete("/intrants/{intrant_id}")
-async def delete_intrant(
-    intrant_id: int,
-    current_user: User = Depends(get_current_user)
-):
-    intrant_data = db.get_by_id("intrants", intrant_id)
-    if not intrant_data or intrant_data.get("tenant_id") != current_user.tenant_id:
-        raise HTTPException(status_code=404, detail="Intrant not found")
 
-    get_accessible_exploitation(current_user, intrant_data["exploitation_id"])
+@data_collection_bp.delete("/intrants/<int:intrant_id>")
+@require_auth
+def delete_intrant(intrant_id: int):
+    user = g.current_user
+    record = db.get_by_id("intrants", intrant_id)
+    if not record or record.get("tenant_id") != user.tenant_id:
+        return jsonify({"detail": "Intrant not found"}), 404
     db.delete("intrants", intrant_id)
-    return {"detail": "Intrant deleted"}
+    return jsonify({"detail": "Intrant deleted"})

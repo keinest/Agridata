@@ -1,100 +1,95 @@
-from typing import List, Optional
+"""Parcelles CRUD routes."""
+from flask import Blueprint, g, jsonify, request
 
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel
-
-from app.application.auth_service import AuthorizationService
-from app.api.dependencies import (
+from backend.app.api.dependencies import (
     get_accessible_exploitation,
     get_accessible_parcelle,
-    get_current_user,
+    require_auth,
 )
-from app.database import db
-from app.infrastructure.models import Parcelle, User
+from backend.app.application.auth_service import AuthorizationService
+from backend.app.database import db
 
-router = APIRouter()
+parcelles_bp = Blueprint("parcelles", __name__)
 
-class ParcelleCreate(BaseModel):
-    exploitation_id: int
-    name: str
-    area: Optional[float] = None
-    area_unit: str = "hectares"
-    crop_type: Optional[str] = None
 
-class ParcelleUpdate(BaseModel):
-    exploitation_id: Optional[int] = None
-    name: Optional[str] = None
-    area: Optional[float] = None
-    area_unit: Optional[str] = None
-    crop_type: Optional[str] = None
+@parcelles_bp.get("/")
+@require_auth
+def list_parcelles():
+    user = g.current_user
+    exploitation_id = request.args.get("exploitation_id", type=int)
 
-class ParcelleResponse(BaseModel):
-    id: int
-    exploitation_id: int
-    tenant_id: int
-    name: str
-    area: Optional[float]
-    area_unit: str
-    crop_type: Optional[str]
-
-    class Config:
-        from_attributes = True
-
-@router.get("/", response_model=List[ParcelleResponse])
-async def list_parcelles(
-    exploitation_id: Optional[int] = None,
-    current_user: User = Depends(get_current_user),
-):
-    filters = {"tenant_id": current_user.tenant_id}
-    if exploitation_id is not None:
-        get_accessible_exploitation(current_user, exploitation_id)
-        filters["exploitation_id"] = exploitation_id
+    if exploitation_id:
+        exploitation, err = get_accessible_exploitation(exploitation_id)
+        if err:
+            return err
+        filters = {"exploitation_id": exploitation_id, "tenant_id": user.tenant_id}
+    else:
+        filters = {"tenant_id": user.tenant_id}
 
     parcelles_data = db.query("parcelles", filters)
-    parcelles_data.sort(key=lambda x: x["name"])
-    return [ParcelleResponse(**p) for p in parcelles_data]
+    parcelles_data = sorted(parcelles_data, key=lambda x: x.get("name", ""))
+    return jsonify(parcelles_data)
 
-@router.post("/", response_model=ParcelleResponse)
-async def create_parcelle(
-    request: ParcelleCreate,
-    current_user: User = Depends(get_current_user),
-):
-    exploitation = get_accessible_exploitation(current_user, request.exploitation_id)
+
+@parcelles_bp.post("/")
+@require_auth
+def create_parcelle():
+    user = g.current_user
+    body = request.get_json(silent=True) or {}
+
+    exploitation_id = body.get("exploitation_id")
+    if not exploitation_id:
+        return jsonify({"detail": "'exploitation_id' is required"}), 400
+    if not body.get("name"):
+        return jsonify({"detail": "'name' is required"}), 400
+
+    exploitation, err = get_accessible_exploitation(int(exploitation_id))
+    if err:
+        return err
 
     parcelle_data = {
+        "tenant_id": user.tenant_id,
         "exploitation_id": exploitation.id,
-        "tenant_id": current_user.tenant_id,
-        "name": request.name,
-        "area": request.area,
-        "area_unit": request.area_unit,
-        "crop_type": request.crop_type,
+        "name": body.get("name"),
+        "area": body.get("area"),
+        "area_unit": body.get("area_unit", "hectares"),
+        "crop_type": body.get("crop_type"),
+        "active": True,
     }
-
     result = db.insert("parcelles", parcelle_data)
-    return ParcelleResponse(**result)
+    return jsonify(result), 201
 
-@router.put("/{parcelle_id}", response_model=ParcelleResponse)
-async def update_parcelle(
-    parcelle_id: int,
-    request: ParcelleUpdate,
-    current_user: User = Depends(get_current_user),
-):
-    parcelle = get_accessible_parcelle(current_user, parcelle_id)
 
-    updates = request.model_dump(exclude_unset=True)
-    if "exploitation_id" in updates:
-        exploitation = get_accessible_exploitation(current_user, updates["exploitation_id"])
-        updates["exploitation_id"] = exploitation.id
+@parcelles_bp.get("/<int:parcelle_id>")
+@require_auth
+def get_parcelle(parcelle_id: int):
+    parcelle, err = get_accessible_parcelle(parcelle_id)
+    if err:
+        return err
+    return jsonify(db.get_by_id("parcelles", parcelle_id))
 
-    db.update("parcelles", parcelle_id, updates)
-    updated = db.get_by_id("parcelles", parcelle_id)
-    return ParcelleResponse(**updated)
 
-@router.delete("/{parcelle_id}")
-async def delete_parcelle(
-    parcelle_id: int,
-    current_user: User = Depends(get_current_user),
-):
-    parcelle = get_accessible_parcelle(current_user, parcelle_id)
+@parcelles_bp.put("/<int:parcelle_id>")
+@require_auth
+def update_parcelle(parcelle_id: int):
+    parcelle, err = get_accessible_parcelle(parcelle_id)
+    if err:
+        return err
+
+    body = request.get_json(silent=True) or {}
+    allowed_fields = ["name", "area", "area_unit", "crop_type", "exploitation_id"]
+    updates = {k: v for k, v in body.items() if k in allowed_fields}
+    updated = db.update("parcelles", parcelle_id, updates)
+    if not updated:
+        return jsonify({"detail": "Parcelle not found"}), 404
+    return jsonify(updated)
+
+
+@parcelles_bp.delete("/<int:parcelle_id>")
+@require_auth
+def delete_parcelle(parcelle_id: int):
+    parcelle, err = get_accessible_parcelle(parcelle_id)
+    if err:
+        return err
     db.delete("parcelles", parcelle_id)
-    return {"detail": "Parcelle deleted"}
+    return jsonify({"detail": "Parcelle deleted"})

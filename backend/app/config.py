@@ -1,102 +1,89 @@
-"""Configuration de l'application FastAPI AgriData."""
+"""Configuration de l'application Flask AgriData."""
 import os
-from typing import Optional
+from typing import List, Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-
-def _parse_bool(value, default: bool = False) -> bool:
-    """Accept common deployment values like 'release' without crashing."""
-    if isinstance(value, bool):
-        return value
-    if value is None:
-        return default
-    normalized = str(value).strip().lower()
-    if normalized in {"1", "true", "yes", "on", "debug", "development", "dev"}:
-        return True
-    if normalized in {"0", "false", "no", "off", "release", "prod", "production"}:
-        return False
-    return default
 
 
 class Settings(BaseSettings):
     """Configuration globale de l'application"""
 
     model_config = SettingsConfigDict(
-        env_file=("backend/.env", ".env"),
-        case_sensitive=True,
+        env_file=".env",
+        env_file_encoding="utf-8",
         extra="ignore",
     )
 
+    # Application
     APP_NAME: str = "AgriData Platform"
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = False
-
     API_PREFIX: str = "/api"
-    DOCS_URL: str = "/docs"
-    REDOC_URL: str = "/redoc"
 
-    # Sur Vercel, DATA_DIR pointe vers /tmp (inscriptible).
-    # La variable VERCEL est injectée automatiquement par la plateforme.
-    DATA_DIR: str = Field(
-        default_factory=lambda: "/tmp/agridata-data" if os.getenv("VERCEL") else "data"
-    )
+    # Data storage
+    DATA_DIR: str = "data"
 
+    # Security
     SECRET_KEY: str = "dev-secret-key-change-in-production"
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
-    # CORS : mettez votre domaine Vercel dans la variable d'env CORS_ORIGINS
-    # Exemple : CORS_ORIGINS=https://mon-projet.vercel.app
-    CORS_ORIGINS: list[str] = Field(
-        default_factory=lambda: [
-            "http://localhost:3000",
-            "http://localhost:5173",
-            "http://localhost:8000",
-            "http://127.0.0.1:3000",
-            "http://127.0.0.1:5173",
-            "http://0.0.0.0:3000",
-            "http://0.0.0.0:5173",
-        ]
-    )
+    # CORS
+    CORS_ORIGINS: List[str] = ["*"]
     CORS_ALLOW_CREDENTIALS: bool = True
-    CORS_ALLOW_METHODS: list[str] = ["*"]
-    CORS_ALLOW_HEADERS: list[str] = ["*"]
+    CORS_ALLOW_METHODS: List[str] = ["*"]
+    CORS_ALLOW_HEADERS: List[str] = ["*"]
 
+    # Optional integrations
     REDIS_URL: str = "redis://localhost:6379/0"
-
     WEATHER_API_KEY: Optional[str] = None
 
+    # Pagination
     DEFAULT_PAGE_SIZE: int = 20
     MAX_PAGE_SIZE: int = 100
 
-    RATE_LIMIT_ENABLED: bool = True
-    RATE_LIMIT_PER_MINUTE: int = 100
+    # Rate limiting
+    RATE_LIMIT_ENABLED: bool = False
+    RATE_LIMIT_PER_MINUTE: int = 60
 
+    # Email
     MAIL_ENABLED: bool = False
     MAIL_USERNAME: Optional[str] = None
     MAIL_PASSWORD: Optional[str] = None
-    MAIL_FROM: Optional[str] = "noreply@agridata.app"
+    MAIL_FROM: str = "noreply@agridata.app"
     MAIL_SERVER: Optional[str] = None
     MAIL_PORT: int = 587
 
+    # Logging
     LOG_LEVEL: str = "INFO"
 
-    @field_validator("DEBUG", "MAIL_ENABLED", mode="before")
+    @field_validator("DEBUG", mode="before")
     @classmethod
-    def parse_bool_fields(cls, value):
-        return _parse_bool(value)
+    def parse_bool_fields(cls, value, default=False) -> bool:
+        """Accept common deployment values like 'release' without crashing."""
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            return normalized in ("1", "true", "yes", "on")
+        return bool(value)
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def parse_cors_origins(cls, value):
-        if value is None or value == "":
-            return []
         if isinstance(value, list):
             return value
-        return [origin.strip() for origin in str(value).split(",") if origin.strip()]
+        if isinstance(value, str):
+            return [origin.strip() for origin in value.split(",")]
+        return value
+
+    def get_data_dir(self) -> str:
+        """Return data directory, using /tmp on serverless (Vercel)."""
+        if os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV"):
+            return "/tmp/data"
+        return self.DATA_DIR
 
 
 settings = Settings()
